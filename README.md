@@ -9,41 +9,41 @@ A production-grade RAG service with three configurable retrieval modes, a LangGr
 ```mermaid
 flowchart TD
     subgraph Ingestion
-        D[Documents] --> C[Chunker\nfixed / sentence / recursive]
-        C --> E[Embedder\nall-MiniLM-L6-v2]
-        E --> PG[(Postgres\n+ pgvector\nHNSW index)]
+        D[Documents] --> C[Chunker]
+        C --> E[Embedder]
+        E --> PG[(Postgres + pgvector)]
     end
 
-    subgraph API["FastAPI  /ask"]
-        REQ[POST /ask\nmode: naive | reranked | agentic]
+    subgraph API[FastAPI /ask]
+        REQ[POST /ask]
     end
 
-    subgraph Naive["Mode: naive"]
-        N1[Embed query] --> N2[similarity_search top-k]
+    subgraph Naive[Mode: naive]
+        N1[Embed query] --> N2[similarity search top-k]
         N2 --> N3[Stuff context]
-        N3 --> N4[Claude → answer + citations]
+        N3 --> N4[Claude answer]
     end
 
-    subgraph Reranked["Mode: reranked"]
-        R1[Embed query] --> R2[similarity_search top-k × multiplier]
-        R2 --> R3[CrossEncoder rerank → top-k]
-        R3 --> R4[Claude → answer + citations]
+    subgraph Reranked[Mode: reranked]
+        R1[Embed query] --> R2[Wide retrieval]
+        R2 --> R3[CrossEncoder rerank]
+        R3 --> R4[Claude answer]
     end
 
-    subgraph Agentic["Mode: agentic  (LangGraph)"]
-        direction TB
-        A1[planner\ndecompose question] --> A2[retrieve\nembed + search + dedup]
-        A2 --> A3[synthesizer\ndraft answer]
-        A3 --> A4{critic\ngrounded?}
-        A4 -- supported / max loops --> A5[final answer]
-        A4 -- rewrite query --> A2
+    subgraph Agentic[Mode: agentic LangGraph]
+        A1[planner] --> A2[retrieve]
+        A2 --> A3[synthesizer]
+        A3 --> A4{critic}
+        A4 -- supported --> A5[final answer]
+        A4 -- rewrite --> A2
     end
 
-    subgraph Eval["Evaluation harness"]
-        G[golden_set.jsonl] --> H[runner\nall 3 modes]
-        H --> I[RAGAS metrics\nfaithfulness · relevancy\nprecision · recall]
-        H --> J[latency p50/p95\ncost per query]
-        I & J --> K[markdown table]
+    subgraph Eval[Evaluation harness]
+        G[golden_set.jsonl] --> H[runner]
+        H --> I[RAGAS metrics]
+        H --> J[latency + cost]
+        I --> K[markdown table]
+        J --> K
     end
 
     PG --> N2
