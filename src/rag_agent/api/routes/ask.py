@@ -9,7 +9,7 @@ from rag_agent.api.deps import get_db, get_embedder, get_settings
 from rag_agent.api.schemas import AskRequest, AskResponse
 from rag_agent.db.client import DBClient
 from rag_agent.ingestion.embedder import Embedder
-from rag_agent.rag import agentic, naive
+from rag_agent.rag import agentic, naive, reranked
 from rag_agent.settings import Settings
 
 log = structlog.get_logger(__name__)
@@ -45,10 +45,7 @@ def ask(
         if mode == "naive":
             return naive.ask(body.question, settings, db, embedder, body.top_k)
         elif mode == "reranked":
-            # Implemented in Phase 4.
-            raise HTTPException(
-                status_code=501, detail="reranked mode not yet implemented"
-            )
+            return reranked.ask(body.question, settings, db, embedder, body.top_k)
         elif mode == "agentic":
             return agentic.ask(body.question, settings, db, embedder, body.top_k)
         else:

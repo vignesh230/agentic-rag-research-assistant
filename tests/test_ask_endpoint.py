@@ -65,10 +65,6 @@ def test_ask_question_too_short(client):
     assert resp.status_code == 422
 
 
-def test_ask_reranked_returns_501(client):
-    resp = client.post("/ask", json={"question": "What is BERT?", "mode": "reranked"})
-    assert resp.status_code == 501
-
 
 
 def test_ask_empty_store_returns_503(client):

@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # reranked mode retrieves top_k * retrieval_multiplier candidates before
     # cross-encoder reranking narrows them back to top_k.
     retrieval_multiplier: int = 4
+    cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # ── Generation ────────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
