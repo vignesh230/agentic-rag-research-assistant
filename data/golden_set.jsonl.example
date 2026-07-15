@@ -1,0 +1,11 @@
+# Golden set schema example — copy to golden_set.jsonl and replace with real entries.
+# Lines starting with # are ignored by the loader.
+#
+# Fields:
+#   question           (required) The query to pose to each RAG mode.
+#   ground_truth       (required) The reference/expected answer.
+#   reference_contexts (optional) Source passages the answer should be grounded in.
+#                      Enables context_precision and context_recall metrics.
+#                      Omit if you only have answer-level ground truth.
+#
+{"question": "What is masked language modelling?", "ground_truth": "Masked language modelling (MLM) is a pre-training objective where random tokens are hidden and the model must predict them from surrounding context.", "reference_contexts": ["BERT uses masked language modeling as one of its pre-training tasks, where 15% of tokens are randomly masked and the model learns to predict them."]}
