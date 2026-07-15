@@ -1,0 +1,1 @@
+"""Agentic RAG research assistant."""
