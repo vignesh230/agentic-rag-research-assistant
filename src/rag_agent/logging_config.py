@@ -18,12 +18,14 @@ def configure_logging(level: str = "INFO") -> None:
     Args:
         level: Standard logging level string (DEBUG, INFO, WARNING, ERROR).
     """
+    # add_logger_name requires a stdlib logger (.name attribute); omit it here
+    # because we use PrintLoggerFactory.  Module context is visible from the
+    # structlog.get_logger(__name__) call in each module.
     shared_processors: list[structlog.types.Processor] = [
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
+        structlog.processors.ExceptionRenderer(),
     ]
 
     structlog.configure(

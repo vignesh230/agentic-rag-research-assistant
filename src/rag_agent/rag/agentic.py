@@ -56,6 +56,7 @@ def ask(
         "critic_loops": 0,
         "sources": [],
         "final_answer": None,
+        "node_traces": [],
     }
 
     log.info("agentic.ask.start", question=question[:80])
@@ -69,8 +70,16 @@ def ask(
         )
 
     latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+    traces = result.get("node_traces", [])
+    total_tokens = sum(t["tokens"] for t in traces if t.get("tokens"))
     critic_loops = result.get("critic_loops", 0)
-    log.info("agentic.ask.done", latency_ms=latency_ms, critic_loops=critic_loops)
+    log.info(
+        "agentic.ask.done",
+        latency_ms=latency_ms,
+        critic_loops=critic_loops,
+        total_tokens=total_tokens,
+        node_traces=traces,
+    )
 
     sources = [
         Source(
@@ -88,6 +97,6 @@ def ask(
         sources=sources,
         mode="agentic",
         latency_ms=latency_ms,
-        tokens_used=None,  # aggregated across multiple calls; Phase 6 adds per-node tracing
+        tokens_used=total_tokens or None,
         prompt_version=None,
     )

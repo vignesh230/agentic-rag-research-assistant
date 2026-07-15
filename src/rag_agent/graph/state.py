@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import List, Optional, TypedDict
 
 
+class NodeTrace(TypedDict):
+    """Per-node observability record appended by each graph node."""
+
+    node: str
+    latency_ms: float
+    tokens: Optional[int]
+    prompt_version: Optional[str]
+
+
 class AgentState(TypedDict):
     """Shared mutable state threaded through every graph node.
 
@@ -16,6 +25,8 @@ class AgentState(TypedDict):
     - sub_questions is overwritten by the critic with a single rewrite query
       when it requests more retrieval, keeping retrieve() focused on only
       the new query rather than re-embedding already-processed questions.
+    - node_traces accumulates one NodeTrace per graph node execution, enabling
+      per-node latency and token-cost breakdowns in evaluation and logs.
     """
 
     question: str
@@ -26,3 +37,4 @@ class AgentState(TypedDict):
     critic_loops: int
     sources: List[dict]
     final_answer: Optional[str]
+    node_traces: List[NodeTrace]

@@ -3,19 +3,24 @@
 Each public function is a factory that captures dependencies (settings, db,
 embedder, anthropic client) and returns a node callable with the signature
 expected by LangGraph: (state: AgentState) -> dict.
+
+Every node appends a NodeTrace entry to state["node_traces"] so callers can
+reconstruct per-node latency, token usage, and prompt version after the graph
+completes.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any, Callable
 
 import anthropic
 import structlog
 
 from rag_agent.db.client import DBClient
-from rag_agent.graph.state import AgentState
+from rag_agent.graph.state import AgentState, NodeTrace
 from rag_agent.ingestion.embedder import Embedder
 from rag_agent.rag import prompt_loader
 from rag_agent.settings import Settings
@@ -28,6 +33,7 @@ def make_planner(settings: Settings, client: anthropic.Anthropic) -> Callable:
 
     def planner(state: AgentState) -> dict:
         question = state["question"]
+        t0 = time.perf_counter()
         log.info("agentic.planner.start", question=question[:80])
 
         system, user, version = prompt_loader.format_user("planner", question=question)
@@ -37,6 +43,9 @@ def make_planner(settings: Settings, client: anthropic.Anthropic) -> Callable:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
+        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+
         raw = msg.content[0].text.strip()
         log.debug("agentic.planner.raw", raw=raw, prompt_version=version)
 
@@ -45,12 +54,16 @@ def make_planner(settings: Settings, client: anthropic.Anthropic) -> Callable:
             if not isinstance(sub_questions, list) or not sub_questions:
                 raise ValueError("not a non-empty list")
         except (json.JSONDecodeError, ValueError):
-            # Fallback: treat the original question as the only sub-question.
             log.warning("agentic.planner.parse_failed", raw=raw)
             sub_questions = [question]
 
-        log.info("agentic.planner.done", n=len(sub_questions))
-        return {"sub_questions": sub_questions}
+        trace: NodeTrace = {"node": "planner", "latency_ms": latency_ms,
+                            "tokens": tokens, "prompt_version": version}
+        log.info("agentic.planner.done", n=len(sub_questions), **trace)
+        return {
+            "sub_questions": sub_questions,
+            "node_traces": state.get("node_traces", []) + [trace],
+        }
 
     return planner
 
@@ -64,6 +77,7 @@ def make_retrieve(
         sub_questions = state["sub_questions"]
         existing = state.get("retrieved_chunks", [])
         seen: set[str] = {_chunk_key(c) for c in existing}
+        t0 = time.perf_counter()
 
         log.info("agentic.retrieve.start", queries=sub_questions, existing=len(existing))
         new_chunks: list[dict] = []
@@ -77,8 +91,15 @@ def make_retrieve(
                     seen.add(key)
                     new_chunks.append(h)
 
-        log.info("agentic.retrieve.done", new=len(new_chunks), total=len(existing) + len(new_chunks))
-        return {"retrieved_chunks": existing + new_chunks}
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        trace: NodeTrace = {"node": "retrieve", "latency_ms": latency_ms,
+                            "tokens": None, "prompt_version": None}
+        log.info("agentic.retrieve.done", new=len(new_chunks),
+                 total=len(existing) + len(new_chunks), **trace)
+        return {
+            "retrieved_chunks": existing + new_chunks,
+            "node_traces": state.get("node_traces", []) + [trace],
+        }
 
     return retrieve
 
@@ -89,12 +110,17 @@ def make_synthesizer(settings: Settings, client: anthropic.Anthropic) -> Callabl
     def synthesizer(state: AgentState) -> dict:
         chunks = state["retrieved_chunks"]
         question = state["question"]
+        t0 = time.perf_counter()
 
         if not chunks:
             log.warning("agentic.synthesizer.no_chunks")
+            latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+            trace: NodeTrace = {"node": "synthesizer", "latency_ms": latency_ms,
+                                "tokens": None, "prompt_version": None}
             return {
                 "draft_answer": "No relevant context was retrieved.",
                 "sources": [],
+                "node_traces": state.get("node_traces", []) + [trace],
             }
 
         context = "\n\n".join(
@@ -112,14 +138,22 @@ def make_synthesizer(settings: Settings, client: anthropic.Anthropic) -> Callabl
             system=system,
             messages=[{"role": "user", "content": user}],
         )
+        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
         draft = msg.content[0].text.strip()
         sources = [
             {"ref": i, "content": c["content"], "source": c["source"],
              "title": c.get("title"), "similarity": round(c["similarity"], 4)}
             for i, c in enumerate(chunks, 1)
         ]
-        log.info("agentic.synthesizer.done", tokens=msg.usage.input_tokens + msg.usage.output_tokens)
-        return {"draft_answer": draft, "sources": sources}
+        trace = {"node": "synthesizer", "latency_ms": latency_ms,
+                 "tokens": tokens, "prompt_version": version}
+        log.info("agentic.synthesizer.done", **trace)
+        return {
+            "draft_answer": draft,
+            "sources": sources,
+            "node_traces": state.get("node_traces", []) + [trace],
+        }
 
     return synthesizer
 
@@ -131,6 +165,7 @@ def make_critic(settings: Settings, client: anthropic.Anthropic) -> Callable:
         draft = state.get("draft_answer", "") or ""
         chunks = state.get("retrieved_chunks", [])
         loops = state.get("critic_loops", 0)
+        t0 = time.perf_counter()
 
         context = "\n\n".join(
             f"[{i}] {c['content']}" for i, c in enumerate(chunks, 1)
@@ -146,10 +181,19 @@ def make_critic(settings: Settings, client: anthropic.Anthropic) -> Callable:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
+        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
         verdict = msg.content[0].text.strip().lower()
-        log.info("agentic.critic.verdict", verdict=verdict[:80], loop=loops)
 
-        update: dict[str, Any] = {"critic_verdict": verdict, "critic_loops": loops + 1}
+        trace: NodeTrace = {"node": "critic", "latency_ms": latency_ms,
+                            "tokens": tokens, "prompt_version": version}
+        log.info("agentic.critic.verdict", verdict=verdict[:80], loop=loops, **trace)
+
+        update: dict[str, Any] = {
+            "critic_verdict": verdict,
+            "critic_loops": loops + 1,
+            "node_traces": state.get("node_traces", []) + [trace],
+        }
 
         if verdict == "supported" or loops + 1 >= settings.max_critic_loops:
             update["final_answer"] = draft
