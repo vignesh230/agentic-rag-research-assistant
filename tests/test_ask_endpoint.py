@@ -70,10 +70,6 @@ def test_ask_reranked_returns_501(client):
     assert resp.status_code == 501
 
 
-def test_ask_agentic_returns_501(client):
-    resp = client.post("/ask", json={"question": "What is BERT?", "mode": "agentic"})
-    assert resp.status_code == 501
-
 
 def test_ask_empty_store_returns_503(client):
     with patch("rag_agent.api.routes.ask.naive.ask", side_effect=ValueError("Vector store is empty")):
