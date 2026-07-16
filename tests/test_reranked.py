@@ -33,8 +33,8 @@ def _chunks(n: int) -> list[dict]:
 
 def _msg(text: str):
     m = MagicMock()
-    m.content = [MagicMock(text=text)]
-    m.usage = MagicMock(input_tokens=10, output_tokens=20)
+    m.content = text
+    m.usage_metadata = {"total_tokens": 30}
     return m
 
 
@@ -86,9 +86,9 @@ def test_reranked_ask_retrieves_wider_then_narrows(settings):
     fake_scores = [float(i) for i in range(6)]
 
     with patch("rag_agent.rag.reranker._get_model") as mock_ce, \
-         patch("rag_agent.rag.reranked.anthropic.Anthropic") as mock_anth:
+         patch("rag_agent.rag.reranked.get_llm") as mock_get_llm:
         mock_ce.return_value.predict.return_value = fake_scores
-        mock_anth.return_value.messages.create.return_value = _msg("Answer.")
+        mock_get_llm.return_value.invoke.return_value = _msg("Answer.")
 
         result = reranked.ask("Q?", settings, db, embedder)
 
@@ -117,9 +117,9 @@ def test_reranked_ask_returns_response(settings):
     embedder.embed_one.return_value = np.zeros(384, dtype=np.float32)
 
     with patch("rag_agent.rag.reranker._get_model") as mock_ce, \
-         patch("rag_agent.rag.reranked.anthropic.Anthropic") as mock_anth:
+         patch("rag_agent.rag.reranked.get_llm") as mock_get_llm:
         mock_ce.return_value.predict.return_value = list(range(6))
-        mock_anth.return_value.messages.create.return_value = _msg("Final answer.")
+        mock_get_llm.return_value.invoke.return_value = _msg("Final answer.")
 
         result = reranked.ask("Q?", settings, db, embedder)
 

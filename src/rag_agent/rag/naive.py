@@ -10,12 +10,13 @@ from __future__ import annotations
 import time
 from typing import Any
 
-import anthropic
 import structlog
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from rag_agent.api.schemas import AskResponse, Source
 from rag_agent.db.client import DBClient
 from rag_agent.ingestion.embedder import Embedder
+from rag_agent.llm import get_llm
 from rag_agent.rag import prompt_loader
 from rag_agent.settings import Settings
 
@@ -71,18 +72,13 @@ def ask(
     system, user, prompt_version = prompt_loader.format_user(
         "naive_rag", context=context, question=question
     )
-    log.info("naive_rag.generating", prompt_version=prompt_version, model=settings.claude_model)
+    log.info("naive_rag.generating", prompt_version=prompt_version, provider=settings.llm_provider)
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
-        model=settings.claude_model,
-        max_tokens=1024,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
+    llm = get_llm(settings, max_tokens=1024)
+    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
 
-    answer = message.content[0].text
-    tokens_used = message.usage.input_tokens + message.usage.output_tokens
+    answer = response.content
+    tokens_used = (response.usage_metadata or {}).get("total_tokens")
     latency_ms = (time.perf_counter() - t0) * 1000
 
     log.info(

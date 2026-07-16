@@ -16,8 +16,9 @@ import json
 import time
 from typing import Any, Callable
 
-import anthropic
 import structlog
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from rag_agent.db.client import DBClient
 from rag_agent.graph.state import AgentState, NodeTrace
@@ -28,7 +29,7 @@ from rag_agent.settings import Settings
 log = structlog.get_logger(__name__)
 
 
-def make_planner(settings: Settings, client: anthropic.Anthropic) -> Callable:
+def make_planner(settings: Settings, client: BaseChatModel) -> Callable:
     """Decompose the user question into 1-3 focused sub-questions."""
 
     def planner(state: AgentState) -> dict:
@@ -37,16 +38,11 @@ def make_planner(settings: Settings, client: anthropic.Anthropic) -> Callable:
         log.info("agentic.planner.start", question=question[:80])
 
         system, user, version = prompt_loader.format_user("planner", question=question)
-        msg = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=256,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        msg = client.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+        tokens = (msg.usage_metadata or {}).get("total_tokens")
         latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-        raw = msg.content[0].text.strip()
+        raw = msg.content.strip()
         log.debug("agentic.planner.raw", raw=raw, prompt_version=version)
 
         try:
@@ -104,7 +100,7 @@ def make_retrieve(
     return retrieve
 
 
-def make_synthesizer(settings: Settings, client: anthropic.Anthropic) -> Callable:
+def make_synthesizer(settings: Settings, client: BaseChatModel) -> Callable:
     """Draft an answer from all accumulated chunks."""
 
     def synthesizer(state: AgentState) -> dict:
@@ -132,15 +128,10 @@ def make_synthesizer(settings: Settings, client: anthropic.Anthropic) -> Callabl
         )
         log.info("agentic.synthesizer.generating", chunks=len(chunks), prompt_version=version)
 
-        msg = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=1024,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        msg = client.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+        tokens = (msg.usage_metadata or {}).get("total_tokens")
         latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-        draft = msg.content[0].text.strip()
+        draft = msg.content.strip()
         sources = [
             {"ref": i, "content": c["content"], "source": c["source"],
              "title": c.get("title"), "similarity": round(c["similarity"], 4)}
@@ -158,7 +149,7 @@ def make_synthesizer(settings: Settings, client: anthropic.Anthropic) -> Callabl
     return synthesizer
 
 
-def make_critic(settings: Settings, client: anthropic.Anthropic) -> Callable:
+def make_critic(settings: Settings, client: BaseChatModel) -> Callable:
     """Grade groundedness of the draft; emit rewrite query or mark supported."""
 
     def critic(state: AgentState) -> dict:
@@ -175,15 +166,10 @@ def make_critic(settings: Settings, client: anthropic.Anthropic) -> Callable:
         )
         log.info("agentic.critic.start", loop=loops, prompt_version=version)
 
-        msg = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=128,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        tokens = msg.usage.input_tokens + msg.usage.output_tokens
+        msg = client.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+        tokens = (msg.usage_metadata or {}).get("total_tokens")
         latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-        verdict = msg.content[0].text.strip().lower()
+        verdict = msg.content.strip().lower()
 
         trace: NodeTrace = {"node": "critic", "latency_ms": latency_ms,
                             "tokens": tokens, "prompt_version": version}

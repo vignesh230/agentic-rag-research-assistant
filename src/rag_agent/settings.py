@@ -42,8 +42,14 @@ class Settings(BaseSettings):
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # ── Generation ────────────────────────────────────────────────────────────
+    llm_provider: Literal["anthropic", "nvidia"] = "anthropic"
+    # Anthropic
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-6"
+    # NVIDIA NIM (OpenAI-compatible endpoint)
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "meta/llama-3.1-8b-instruct"
     # Cap critic loops to prevent runaway retries; 3 is enough for convergence
     # in practice while keeping cost bounded.
     max_critic_loops: int = Field(default=3, ge=1, le=10)

@@ -59,15 +59,15 @@ def compute_cost(results: list[QueryResult]) -> Optional[float]:
     return round(cost, 6)
 
 
-def compute_ragas(run: ModeRunResult, anthropic_api_key: str) -> Dict[str, Optional[float]]:
+def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float]]:
     """Run RAGAS evaluation on the collected results.
 
-    Uses Claude (via LangChain wrapper) as the judge LLM so no OpenAI key
-    is required.  Returns a dict of metric_name → score (0-1) or None on error.
+    Uses the configured LLM provider as the judge.  Returns a dict of
+    metric_name → score (0-1) or None on error.
 
     Args:
         run: Completed ModeRunResult with answers and retrieved contexts.
-        anthropic_api_key: Key for the Claude judge LLM.
+        settings: Application Settings object (uses module singleton if None).
 
     Returns:
         Dict with keys: faithfulness, answer_relevancy, context_precision,
@@ -86,7 +86,6 @@ def compute_ragas(run: ModeRunResult, anthropic_api_key: str) -> Dict[str, Optio
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            from langchain_anthropic import ChatAnthropic
             from ragas import EvaluationDataset, SingleTurnSample, evaluate
             from ragas.llms import LangchainLLMWrapper
             from ragas.metrics.collections import (
@@ -96,12 +95,10 @@ def compute_ragas(run: ModeRunResult, anthropic_api_key: str) -> Dict[str, Optio
                 faithfulness,
             )
 
-        llm = LangchainLLMWrapper(
-            ChatAnthropic(
-                model="claude-haiku-4-5-20251001",  # cheaper judge; swap to sonnet for higher accuracy
-                api_key=anthropic_api_key,
-            )
-        )
+        from rag_agent.llm import get_llm
+        from rag_agent.settings import Settings as _Settings
+        _settings = settings or _Settings()
+        llm = LangchainLLMWrapper(get_llm(_settings))
 
         samples = [
             SingleTurnSample(
@@ -136,11 +133,11 @@ def compute_ragas(run: ModeRunResult, anthropic_api_key: str) -> Dict[str, Optio
         return empty
 
 
-def build_metrics(run: ModeRunResult, anthropic_api_key: str) -> ModeMetrics:
+def build_metrics(run: ModeRunResult, settings=None) -> ModeMetrics:
     """Assemble all metrics for one mode into a ModeMetrics object."""
     p50, p95 = compute_latency(run.results)
     cost = compute_cost(run.results)
-    ragas_scores = compute_ragas(run, anthropic_api_key)
+    ragas_scores = compute_ragas(run, settings)
 
     return ModeMetrics(
         mode=run.mode,

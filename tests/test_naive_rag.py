@@ -49,17 +49,16 @@ def mock_embedder():
     return emb
 
 
-def _make_anthropic_response(text: str, input_tokens: int = 10, output_tokens: int = 20):
+def _make_llm_response(text: str, input_tokens: int = 10, output_tokens: int = 20):
     resp = MagicMock()
-    resp.content = [MagicMock(text=text)]
-    resp.usage = MagicMock(input_tokens=input_tokens, output_tokens=output_tokens)
+    resp.content = text
+    resp.usage_metadata = {"total_tokens": input_tokens + output_tokens}
     return resp
 
 
 def test_ask_returns_response(settings, mock_db, mock_embedder):
-    with patch("rag_agent.rag.naive.anthropic.Anthropic") as mock_client_cls:
-        mock_client = mock_client_cls.return_value
-        mock_client.messages.create.return_value = _make_anthropic_response("Transformers use attention [1].")
+    with patch("rag_agent.rag.naive.get_llm") as mock_get_llm:
+        mock_get_llm.return_value.invoke.return_value = _make_llm_response("Transformers use attention [1].")
 
         result = naive.ask("What are transformers?", settings, mock_db, mock_embedder)
 
@@ -72,9 +71,8 @@ def test_ask_returns_response(settings, mock_db, mock_embedder):
 
 
 def test_ask_uses_top_k_override(settings, mock_db, mock_embedder):
-    with patch("rag_agent.rag.naive.anthropic.Anthropic") as mock_client_cls:
-        mock_client = mock_client_cls.return_value
-        mock_client.messages.create.return_value = _make_anthropic_response("Answer.")
+    with patch("rag_agent.rag.naive.get_llm") as mock_get_llm:
+        mock_get_llm.return_value.invoke.return_value = _make_llm_response("Answer.")
 
         naive.ask("Q?", settings, mock_db, mock_embedder, top_k=7)
 
@@ -92,9 +90,8 @@ def test_ask_raises_on_empty_store(settings, mock_embedder):
 
 
 def test_sources_have_correct_refs(settings, mock_db, mock_embedder):
-    with patch("rag_agent.rag.naive.anthropic.Anthropic") as mock_client_cls:
-        mock_client = mock_client_cls.return_value
-        mock_client.messages.create.return_value = _make_anthropic_response("A")
+    with patch("rag_agent.rag.naive.get_llm") as mock_get_llm:
+        mock_get_llm.return_value.invoke.return_value = _make_llm_response("A")
 
         result = naive.ask("Q?", settings, mock_db, mock_embedder)
 

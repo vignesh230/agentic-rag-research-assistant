@@ -24,8 +24,8 @@ def mock_client():
 
 def _msg(text: str, in_tok: int = 10, out_tok: int = 20):
     m = MagicMock()
-    m.content = [MagicMock(text=text)]
-    m.usage = MagicMock(input_tokens=in_tok, output_tokens=out_tok)
+    m.content = text
+    m.usage_metadata = {"total_tokens": in_tok + out_tok}
     return m
 
 
@@ -47,14 +47,14 @@ def _base_state(**kwargs) -> AgentState:
 # ── planner ─────────────────────────────────────────────────────────────────
 
 def test_planner_parses_json(settings, mock_client):
-    mock_client.messages.create.return_value = _msg('["What is A?", "How does B work?"]')
+    mock_client.invoke.return_value = _msg('["What is A?", "How does B work?"]')
     fn = make_planner(settings, mock_client)
     result = fn(_base_state())
     assert result["sub_questions"] == ["What is A?", "How does B work?"]
 
 
 def test_planner_falls_back_on_bad_json(settings, mock_client):
-    mock_client.messages.create.return_value = _msg("Sorry, I can't decompose that.")
+    mock_client.invoke.return_value = _msg("Sorry, I can't decompose that.")
     fn = make_planner(settings, mock_client)
     result = fn(_base_state())
     assert result["sub_questions"] == ["What is attention?"]
@@ -95,7 +95,7 @@ def test_retrieve_deduplicates(settings):
 # ── synthesizer ───────────────────────────────────────────────────────────────
 
 def test_synthesizer_produces_draft(settings, mock_client):
-    mock_client.messages.create.return_value = _msg("Attention is [1] a mechanism.")
+    mock_client.invoke.return_value = _msg("Attention is [1] a mechanism.")
     fn = make_synthesizer(settings, mock_client)
     chunks = [{"content": "ctx", "source": "doc.pdf", "title": None, "similarity": 0.9}]
     result = fn(_base_state(retrieved_chunks=chunks))
@@ -107,13 +107,13 @@ def test_synthesizer_no_chunks(settings, mock_client):
     fn = make_synthesizer(settings, mock_client)
     result = fn(_base_state(retrieved_chunks=[]))
     assert "No relevant context" in result["draft_answer"]
-    mock_client.messages.create.assert_not_called()
+    mock_client.invoke.assert_not_called()
 
 
 # ── critic ────────────────────────────────────────────────────────────────────
 
 def test_critic_supported(settings, mock_client):
-    mock_client.messages.create.return_value = _msg("supported")
+    mock_client.invoke.return_value = _msg("supported")
     fn = make_critic(settings, mock_client)
     chunks = [{"content": "ctx", "source": "s", "title": None, "similarity": 0.9}]
     result = fn(_base_state(draft_answer="The answer.", retrieved_chunks=chunks))
@@ -122,7 +122,7 @@ def test_critic_supported(settings, mock_client):
 
 
 def test_critic_rewrite_sets_sub_questions(settings, mock_client):
-    mock_client.messages.create.return_value = _msg("rewrite: how does attention scale")
+    mock_client.invoke.return_value = _msg("rewrite: how does attention scale")
     fn = make_critic(settings, mock_client)
     chunks = [{"content": "ctx", "source": "s", "title": None, "similarity": 0.9}]
     result = fn(_base_state(draft_answer="Draft.", retrieved_chunks=chunks, critic_loops=0))
@@ -131,7 +131,7 @@ def test_critic_rewrite_sets_sub_questions(settings, mock_client):
 
 
 def test_critic_caps_at_max_loops(settings, mock_client):
-    mock_client.messages.create.return_value = _msg("rewrite: something else")
+    mock_client.invoke.return_value = _msg("rewrite: something else")
     fn = make_critic(settings, mock_client)
     chunks = [{"content": "ctx", "source": "s", "title": None, "similarity": 0.9}]
     # critic_loops already at max - 1; after increment it hits max.

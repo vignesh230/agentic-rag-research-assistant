@@ -6,7 +6,6 @@ expensive (~100ms) and the graph is stateless between invocations.
 
 from __future__ import annotations
 
-import anthropic
 import structlog
 from langgraph.graph import END, START, StateGraph
 
@@ -14,6 +13,7 @@ from rag_agent.db.client import DBClient
 from rag_agent.graph.nodes import make_critic, make_planner, make_retrieve, make_synthesizer
 from rag_agent.graph.state import AgentState
 from rag_agent.ingestion.embedder import Embedder
+from rag_agent.llm import get_llm
 from rag_agent.settings import Settings
 
 log = structlog.get_logger(__name__)
@@ -31,12 +31,12 @@ def build_graph(settings: Settings, db: DBClient, embedder: Embedder, top_k: int
     Returns:
         Compiled LangGraph runnable.
     """
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    llm = get_llm(settings)
 
-    planner = make_planner(settings, client)
+    planner = make_planner(settings, llm)
     retrieve = make_retrieve(settings, db, embedder, top_k)
-    synthesizer = make_synthesizer(settings, client)
-    critic = make_critic(settings, client)
+    synthesizer = make_synthesizer(settings, llm)
+    critic = make_critic(settings, llm)
 
     def _route_after_critic(state: AgentState) -> str:
         verdict = (state.get("critic_verdict") or "supported").lower()

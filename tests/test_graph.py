@@ -13,22 +13,22 @@ from rag_agent.api.schemas import AskResponse
 from rag_agent.settings import Settings
 
 
-def _mock_client(planner_text, synth_text, critic_text):
-    """Return a fake Anthropic client that cycles through three canned responses."""
-    client = MagicMock()
+def _mock_llm(planner_text, synth_text, critic_text):
+    """Return a fake LangChain LLM that cycles through three canned responses."""
+    llm = MagicMock()
     responses = [planner_text, synth_text, critic_text]
     call_count = [0]
 
-    def _create(**kwargs):
+    def _invoke(messages, **kwargs):
         idx = min(call_count[0], len(responses) - 1)
         call_count[0] += 1
         m = MagicMock()
-        m.content = [MagicMock(text=responses[idx])]
-        m.usage = MagicMock(input_tokens=10, output_tokens=20)
+        m.content = responses[idx]
+        m.usage_metadata = {"total_tokens": 30}
         return m
 
-    client.messages.create.side_effect = _create
-    return client
+    llm.invoke.side_effect = _invoke
+    return llm
 
 
 # ── agentic.ask() unit test ───────────────────────────────────────────────────
@@ -44,14 +44,13 @@ def test_agentic_ask_happy_path():
     embedder = MagicMock()
     embedder.embed_one.return_value = np.zeros(384, dtype=np.float32)
 
-    fake_client = _mock_client(
+    fake_llm = _mock_llm(
         '["What is self-attention?"]',
         "Self-attention allows tokens to attend to each other [1].",
         "supported",
     )
 
-    with patch("rag_agent.graph.nodes.anthropic.Anthropic", return_value=fake_client), \
-         patch("rag_agent.graph.graph.anthropic.Anthropic", return_value=fake_client):
+    with patch("rag_agent.graph.graph.get_llm", return_value=fake_llm):
         from rag_agent.rag import agentic
         result = agentic.ask("What is attention?", settings, db, embedder)
 
@@ -67,10 +66,9 @@ def test_agentic_ask_raises_on_empty_store():
     embedder = MagicMock()
     embedder.embed_one.return_value = np.zeros(384, dtype=np.float32)
 
-    fake_client = _mock_client('["What is attention?"]', "No relevant context was retrieved.", "supported")
+    fake_llm = _mock_llm('["What is attention?"]', "No relevant context was retrieved.", "supported")
 
-    with patch("rag_agent.graph.nodes.anthropic.Anthropic", return_value=fake_client), \
-         patch("rag_agent.graph.graph.anthropic.Anthropic", return_value=fake_client):
+    with patch("rag_agent.graph.graph.get_llm", return_value=fake_llm):
         from rag_agent.rag import agentic
         # synthesizer returns "No relevant context" → graph still sets final_answer
         result = agentic.ask("Q?", settings, db, embedder)
