@@ -54,7 +54,7 @@ def run(source: str | Path, settings: Settings, db: DBClient) -> dict[str, int]:
             log.warning("pipeline.no_chunks", source=doc.source)
             continue
 
-        texts = [c.content for c in chunks]
+        texts = [c.content.replace("\x00", "") for c in chunks]
         embeddings = embedder.embed(texts)
 
         doc_id = db.insert_document(

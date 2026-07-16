@@ -156,7 +156,7 @@ class DBClient:
         rows = [
             (
                 doc_id,
-                c["content"],
+                c["content"].replace("\x00", ""),
                 embeddings[i].tolist(),
                 c["chunk_index"],
                 c.get("start_char"),
