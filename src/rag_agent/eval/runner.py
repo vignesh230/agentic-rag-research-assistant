@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -59,7 +60,9 @@ def run_mode(
     _ask = {"naive": naive.ask, "reranked": reranked.ask, "agentic": agentic.ask}[mode]
     run = ModeRunResult(mode=mode)
 
-    for item in golden:
+    for i, item in enumerate(golden):
+        if i > 0:
+            time.sleep(1.5)  # avoid NIM rate limiting between queries
         try:
             resp = _ask(item.question, settings, db, embedder)
             run.results.append(QueryResult(
