@@ -1,6 +1,8 @@
 # Agentic RAG Research Assistant
 
-A production-grade RAG service with three configurable retrieval modes, a LangGraph self-critique loop, and a full RAGAS evaluation harness. Built as a portfolio project for ML/AI engineering interviews.
+[![CI](https://github.com/vignesh230/agentic-rag-research-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/vignesh230/agentic-rag-research-assistant/actions/workflows/ci.yml)
+
+A production-grade RAG service with three configurable retrieval modes, a LangGraph self-critique loop, and a full evaluation harness. Built as a portfolio project for ML/AI engineering interviews.
 
 ---
 
@@ -21,13 +23,13 @@ flowchart TD
     subgraph Naive[Mode: naive]
         N1[Embed query] --> N2[similarity search top-k]
         N2 --> N3[Stuff context]
-        N3 --> N4[Claude answer]
+        N3 --> N4[LLM answer]
     end
 
     subgraph Reranked[Mode: reranked]
         R1[Embed query] --> R2[Wide retrieval]
         R2 --> R3[CrossEncoder rerank]
-        R3 --> R4[Claude answer]
+        R3 --> R4[LLM answer]
     end
 
     subgraph Agentic[Mode: agentic LangGraph]
@@ -40,7 +42,7 @@ flowchart TD
 
     subgraph Eval[Evaluation harness]
         G[golden_set.jsonl] --> H[runner]
-        H --> I[RAGAS metrics]
+        H --> I[string-overlap metrics]
         H --> J[latency + cost]
         I --> K[markdown table]
         J --> K
