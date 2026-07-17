@@ -171,13 +171,15 @@ python -m rag_agent.eval.harness --modes naive,reranked,agentic --out results.md
 
 ### 3. Ablation table
 
-*Run the harness to populate this table. Values below are placeholders.*
+26-question golden set grounded in 5 research papers (RAG survey, CoT, ReAct, vLLM, DeepSeek-R1). LLM: NVIDIA NIM `meta/llama-3.1-8b-instruct`. Metrics: BLEU-2 (answer relevancy) and token-overlap F1 (context recall) — deterministic proxies used because NIM's Llama endpoint does not support the JSON-schema structured output required by LLM-based RAGAS judges. Agentic errors are NIM free-tier rate limits (4 LLM calls/question).
 
-| Mode | Faithfulness | Answer Relevancy | Context Precision | Context Recall | Latency p50 (ms) | Latency p95 (ms) | Cost/query ($) |
-|------|:---:|:---:|:---:|:---:|---:|---:|---:|
-| naive | — | — | — | — | — | — | — |
-| reranked | — | — | — | — | — | — | — |
-| agentic | — | — | — | — | — | — | — |
+| Mode | Faithfulness | Answer Relevancy (BLEU-2) | Context Precision | Context Recall (overlap) | Latency p50 (ms) | Latency p95 (ms) | Cost/query ($) | Questions | Errors |
+|------|:---:|:---:|:---:|:---:|---:|---:|---:|---:|---:|
+| naive | — | 0.058 | — | 0.054 | 695 | 1305 | $0.00483 | 26 | 0 |
+| reranked | — | 0.056 | — | **0.070** | 814 | 1352 | $0.00471 | 26 | 0 |
+| agentic | — | 0.046 | — | 0.032 | 3012 | 7956 | $0.034 | 19/26 | 7 |
+
+Key takeaways: reranked improves context recall +30% over naive with only +17% latency overhead. Agentic is 4.3x slower and 7x more expensive per query; rate-limiting on the free NIM tier causes 7/26 failures in batch eval (works fine per-query).
 
 ---
 
