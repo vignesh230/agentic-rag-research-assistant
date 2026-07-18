@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     rag_mode: Literal["naive", "reranked", "agentic"] = "naive"
     log_level: str = "INFO"
 
+    def validate_api_keys(self) -> None:
+        """Raise ValueError if the active provider's API key is missing.
+
+        Call this at app startup, not during construction, so tests can create
+        Settings instances without real keys.
+        """
+        if self.llm_provider == "anthropic" and not self.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY must be set when llm_provider='anthropic'")
+        if self.llm_provider == "nvidia" and not self.nvidia_api_key:
+            raise ValueError("NVIDIA_API_KEY must be set when llm_provider='nvidia'")
+
 
 # Module-level singleton — import this instead of constructing in every module.
 settings = Settings()

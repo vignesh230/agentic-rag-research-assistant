@@ -51,5 +51,5 @@ def rerank(query: str, chunks: list[dict], top_k: int, model_name: str) -> list[
     for score, chunk in ranked[:top_k]:
         result.append({**chunk, "ce_score": float(score)})
 
-    log.info("reranker.done", candidates=len(chunks), returned=len(result), top_score=result[0]["ce_score"])
+    log.info("reranker.done", candidates=len(chunks), returned=len(result), top_score=result[0]["ce_score"] if result else None)
     return result

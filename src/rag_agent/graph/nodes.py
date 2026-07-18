@@ -185,7 +185,10 @@ def make_critic(settings: Settings, client: BaseChatModel) -> Callable:
             update["final_answer"] = draft
         elif verdict.startswith("rewrite:"):
             rewrite_query = verdict[len("rewrite:"):].strip()
-            update["sub_questions"] = [rewrite_query]
+            update["sub_questions"] = [rewrite_query or state["question"]]
+        else:
+            # Unrecognised verdict — promote draft rather than leaving final_answer None
+            update["final_answer"] = draft
 
         return update
 

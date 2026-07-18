@@ -69,7 +69,6 @@ def _fixed(doc: Document, size: int, overlap: int) -> list[Chunk]:
     Returns:
         List of Chunk objects.
     """
-    text = doc.source and doc.content  # just the content
     text = doc.content
     chunks: list[Chunk] = []
     step = max(1, size - overlap)

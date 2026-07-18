@@ -19,6 +19,9 @@ from rag_agent.settings import Settings
 
 log = structlog.get_logger(__name__)
 
+# ponytail: keyed on (db id, embedder id, top_k) — objects are singletons per process
+_graph_cache: dict[tuple, object] = {}
+
 
 def ask(
     question: str,
@@ -45,7 +48,10 @@ def ask(
     k = top_k or settings.top_k
     t0 = time.perf_counter()
 
-    graph = build_graph(settings, db, embedder, k)
+    cache_key = (id(db), id(embedder), k)
+    if cache_key not in _graph_cache:
+        _graph_cache[cache_key] = build_graph(settings, db, embedder, k)
+    graph = _graph_cache[cache_key]
 
     initial: AgentState = {
         "question": question,

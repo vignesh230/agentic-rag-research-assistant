@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = Settings()
     configure_logging(settings.log_level)
 
+    settings.validate_api_keys()
     log.info("startup.begin", mode=settings.rag_mode, model=settings.claude_model)
 
     db = DBClient(settings)

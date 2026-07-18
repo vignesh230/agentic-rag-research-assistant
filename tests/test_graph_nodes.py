@@ -39,6 +39,7 @@ def _base_state(**kwargs) -> AgentState:
         "critic_loops": 0,
         "sources": [],
         "final_answer": None,
+        "node_traces": [],
     }
     defaults.update(kwargs)
     return defaults

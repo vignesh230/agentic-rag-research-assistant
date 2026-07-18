@@ -68,8 +68,8 @@ def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float
 
     - context_recall:    fraction of reference-context tokens found in
                          retrieved contexts (token-level F1 via difflib)
-    - answer_relevancy:  RougeL F-measure between answer and ground truth
-                         (NLTK bigram smoother)
+    - answer_relevancy:  BLEU-2 score between answer and ground truth
+                         (NLTK bigram smoother — not RougeL despite the field name)
     - faithfulness / context_precision: None (require LLM judge)
 
     Args:
@@ -127,7 +127,7 @@ def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float
         log.info("eval.metrics.done", mode=run.mode, **{k: v for k, v in result.items() if v is not None})
         return result
 
-    except Exception as exc:
+    except (ImportError, LookupError, ValueError) as exc:
         log.warning("eval.metrics.failed", mode=run.mode, error=str(exc))
         return empty
 

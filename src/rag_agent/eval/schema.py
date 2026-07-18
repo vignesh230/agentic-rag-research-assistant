@@ -31,3 +31,4 @@ class GoldenItem(BaseModel):
     question: str = Field(..., min_length=5)
     ground_truth: str = Field(..., min_length=5)
     reference_contexts: Optional[List[str]] = None
+    source: Optional[dict] = None

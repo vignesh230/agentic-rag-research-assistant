@@ -11,7 +11,7 @@ from rag_agent.eval.schema import GoldenItem
 
 log = structlog.get_logger(__name__)
 
-_DEFAULT_PATH = Path(__file__).parents[4] / "data" / "golden_set.jsonl"
+_DEFAULT_PATH = Path(__file__).parents[3] / "data" / "golden_set.jsonl"
 
 
 def load_golden_set(path: Path | None = None) -> list[GoldenItem]:

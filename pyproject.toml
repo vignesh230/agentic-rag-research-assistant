@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.1",
     "langchain>=0.2",
     "langchain-anthropic>=0.2",
+    "langchain-openai>=0.1",
     "langgraph>=0.1",
     "sentence-transformers>=3.0",
     "psycopg2-binary>=2.9",
@@ -40,6 +41,9 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: marks tests requiring live services (postgres, model downloads); deselect with -m 'not integration'",
+]
 
 [tool.coverage.run]
 source = ["src"]
