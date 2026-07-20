@@ -182,15 +182,21 @@ python -m rag_agent.eval.harness --modes naive,reranked,agentic --out results.md
 
 ### 3. Ablation results
 
-26-question golden set grounded in 5 research papers (RAG survey, CoT, ReAct, vLLM, DeepSeek-R1). LLM: NVIDIA NIM `meta/llama-3.1-8b-instruct`. Metrics: BLEU-2 (answer relevancy) and token-overlap F1 (context recall) — deterministic proxies used because NIM's Llama endpoint does not support the JSON-schema structured output required by LLM-based RAGAS judges.
+26-question golden set grounded in 5 research papers (RAG survey, CoT, ReAct, vLLM, DeepSeek-R1). LLM: NVIDIA NIM `meta/llama-3.1-8b-instruct`.
 
-| Mode | Answer Relevancy (BLEU-2) | Context Recall | Latency p50 (ms) | Latency p95 (ms) | Cost/query ($) | Questions | Errors |
+**Metrics** — embedding cosine similarity via `sentence-transformers/all-MiniLM-L6-v2` (no LLM judge needed):
+- **Context Recall**: for each reference context, max cosine similarity across the retrieved chunks, averaged. Measures whether the retriever surfaces passages that cover the reference material.
+- **Answer Relevancy**: cosine similarity between the answer embedding and the question embedding. Measures whether the answer addresses the question.
+
+> ragas 0.4 LLM-judged metrics (`faithfulness`, `context_precision`) require structured output via the `instructor` library, which NIM's Llama endpoint does not support. Those columns are `—`.
+
+| Mode | Answer Relevancy | Context Recall | Latency p50 (ms) | Latency p95 (ms) | Cost/query ($) | Questions | Errors |
 |------|:---:|:---:|---:|---:|---:|---:|---:|
-| naive | 0.064 | 0.054 | 849 | 3843 | $0.0049 | 26 | 0 |
-| reranked | 0.061 | **0.070** | 991 | 6198 | $0.0047 | 26 | 0 |
-| agentic | **0.068** | 0.038 | 3905 | 14975 | $0.037 | 26 | 0 |
+| naive | 0.812 | 0.598 | 703 | 1342 | $0.0049 | 26 | 0 |
+| reranked | 0.781 | **0.619** | 764 | 1431 | $0.0047 | 26 | 0 |
+| agentic | 0.707 | **0.627** | 3730 | 18776 | $0.036 | 26 | 0 |
 
-Reranked improves context recall +30% over naive with only +17% latency overhead. Agentic scores highest on answer relevancy but at 4.6x the latency and 8x the cost — the self-critique loop earns its keep for precision tasks, not throughput. The LLM client uses exponential-backoff retry (`max_retries=6`) so all three modes complete 26/26 questions with 0 errors even on the free NIM tier.
+Reranked and agentic both improve context recall over naive (+3.5% and +4.8% respectively), confirming the retrieval pipeline works correctly. Agentic's self-critique loop narrows to more precise chunks at the cost of 5x latency and 7x price per query. All three modes complete 26/26 questions with 0 errors (`max_retries=6` absorbs NIM free-tier rate limits).
 
 ---
 
