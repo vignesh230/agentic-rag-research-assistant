@@ -59,22 +59,36 @@ def compute_cost(results: list[QueryResult]) -> Optional[float]:
     return round(cost, 6)
 
 
-def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float]]:
-    """Compute reference-based retrieval metrics without an LLM judge.
+def _cosine(a, b) -> float:
+    """Cosine similarity between two 1-D arrays."""
+    import numpy as np
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
+    return float(np.dot(a, b) / denom) if denom > 0 else 0.0
 
-    ragas 0.4.x LLM-graded metrics require OpenAI structured-output support
-    (instructor / json_schema), which NIM's Llama endpoint does not provide.
-    We fall back to string-overlap proxies that are deterministic and fast:
 
-    - context_recall:    fraction of reference-context tokens found in
-                         retrieved contexts (token-level F1 via difflib)
-    - answer_relevancy:  BLEU-2 score between answer and ground truth
-                         (NLTK bigram smoother — not RougeL despite the field name)
-    - faithfulness / context_precision: None (require LLM judge)
+def compute_ragas(run: ModeRunResult, settings=None, embedder=None) -> Dict[str, Optional[float]]:
+    """Compute retrieval metrics using embedding cosine similarity.
+
+    ragas 0.4.x LLM-graded metrics require the instructor library for
+    structured output, which NIM's Llama endpoint does not support (hangs).
+    We use embedding-based proxies instead:
+
+    - context_recall:   for each reference context, max cosine similarity
+                        across retrieved chunks; averaged over all questions.
+                        Measures whether the retriever surfaces passages that
+                        cover the reference material.
+    - answer_relevancy: cosine similarity between the answer embedding and the
+                        question embedding. Measures whether the answer
+                        addresses the question (not whether it matches the
+                        ground truth — that would be faithfulness).
+    - faithfulness / context_precision: None (require LLM judge).
 
     Args:
         run: Completed ModeRunResult with answers and retrieved contexts.
         settings: Unused; kept for signature compatibility.
+        embedder: Embedder instance. If None, falls back to a fresh
+                  SentenceTransformer load (slow; pass embedder from harness).
 
     Returns:
         Dict with keys: faithfulness, answer_relevancy, context_precision,
@@ -90,30 +104,40 @@ def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float
         return empty
 
     try:
-        import difflib
-        from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+        # Resolve embedder: use passed-in instance or load model directly.
+        if embedder is not None:
+            _embed = embedder.embed
+        else:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+            _embed = lambda texts: _model.encode(texts, normalize_embeddings=True)
 
         recall_scores: list[float] = []
         relevancy_scores: list[float] = []
 
         for r in run.results:
-            # context_recall: how much of the reference context is covered
-            ref_tokens = " ".join(r.reference_contexts or []).lower().split()
-            ret_tokens = " ".join(r.retrieved_contexts or []).lower().split()
-            if ref_tokens:
-                m = difflib.SequenceMatcher(None, ref_tokens, ret_tokens)
-                recall_scores.append(m.ratio())
+            ref_ctxs = r.reference_contexts or []
+            ret_ctxs = r.retrieved_contexts or []
 
-            # answer_relevancy: BLEU-2 between answer and ground truth
-            hyp = r.answer.lower().split()
-            ref = [r.ground_truth.lower().split()]
-            if hyp and ref[0]:
-                score = sentence_bleu(
-                    ref, hyp,
-                    weights=(0.5, 0.5),
-                    smoothing_function=SmoothingFunction().method1,
-                )
-                relevancy_scores.append(score)
+            # context_recall: for each reference context, best cosine match
+            # among retrieved chunks. Rewards the retriever for surfacing any
+            # chunk that covers a reference passage.
+            if ref_ctxs and ret_ctxs:
+                all_texts = ref_ctxs + ret_ctxs
+                embs = _embed(all_texts)
+                ref_embs = embs[:len(ref_ctxs)]
+                ret_embs = embs[len(ref_ctxs):]
+                per_ref = [
+                    max(_cosine(ref_e, ret_e) for ret_e in ret_embs)
+                    for ref_e in ref_embs
+                ]
+                recall_scores.append(sum(per_ref) / len(per_ref))
+
+            # answer_relevancy: does the answer address the question?
+            # Cosine sim between answer and question embeddings.
+            if r.answer and r.question:
+                a_emb, q_emb = _embed([r.answer, r.question])
+                relevancy_scores.append(_cosine(a_emb, q_emb))
 
         def _mean(lst: list) -> Optional[float]:
             return round(sum(lst) / len(lst), 4) if lst else None
@@ -127,16 +151,16 @@ def compute_ragas(run: ModeRunResult, settings=None) -> Dict[str, Optional[float
         log.info("eval.metrics.done", mode=run.mode, **{k: v for k, v in result.items() if v is not None})
         return result
 
-    except (ImportError, LookupError, ValueError) as exc:
+    except Exception as exc:
         log.warning("eval.metrics.failed", mode=run.mode, error=str(exc))
         return empty
 
 
-def build_metrics(run: ModeRunResult, settings=None) -> ModeMetrics:
+def build_metrics(run: ModeRunResult, settings=None, embedder=None) -> ModeMetrics:
     """Assemble all metrics for one mode into a ModeMetrics object."""
     p50, p95 = compute_latency(run.results)
     cost = compute_cost(run.results)
-    ragas_scores = compute_ragas(run, settings)
+    ragas_scores = compute_ragas(run, settings, embedder=embedder)
 
     return ModeMetrics(
         mode=run.mode,

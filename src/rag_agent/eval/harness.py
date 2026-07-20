@@ -60,7 +60,7 @@ def run_eval(
     for mode in modes:
         log.info("eval.harness.running_mode", mode=mode)
         run = run_mode(mode, golden, settings, db, embedder)
-        m = build_metrics(run, settings)
+        m = build_metrics(run, settings, embedder=embedder)
         all_metrics.append(m)
         log.info("eval.harness.mode_done", mode=mode, errors=m.n_errors)
 
