@@ -26,6 +26,7 @@ def get_llm(settings: Settings, max_tokens: int = 1024) -> BaseChatModel:
             base_url=settings.nvidia_base_url,
             max_tokens=max_tokens,
             temperature=0,
+            max_retries=6,  # ponytail: retry 429s with exponential backoff (~90s ceiling)
         )
 
     from langchain_anthropic import ChatAnthropic
