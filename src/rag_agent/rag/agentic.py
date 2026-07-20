@@ -20,7 +20,7 @@ from rag_agent.settings import Settings
 log = structlog.get_logger(__name__)
 
 # ponytail: keyed on (db id, embedder id, top_k) — objects are singletons per process
-_graph_cache: dict[tuple, object] = {}
+_graph_cache = {}
 
 
 def ask(
